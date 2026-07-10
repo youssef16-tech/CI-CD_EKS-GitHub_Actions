@@ -197,7 +197,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
       ENVIRONMENT: ${{ needs.build.outputs.currentENV }}
       TF_VAR_environment: ${{ needs.build.outputs.currentENV }}
-      NODE_VERSION: ${{ env.NODE_VERSION }}
+      # NOTE: `NODE_VERSION: ${{ env.NODE_VERSION }}` was here and made the ENTIRE file
+      # invalid ("Unrecognized named-value: 'env'"). The `env` context is not available
+      # inside a job's own `env:` block. It's also redundant - the workflow-level
+      # `env:` above is already inherited by every job and step.
 
     steps:
     - name: Checkout Code
