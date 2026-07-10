@@ -3,32 +3,24 @@ kind: Ingress
 metadata:
   name: e2ecicd-ingress
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Force HTTPS
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"  # Allow larger payloads
-    nginx.ingress.kubernetes.io/proxy-buffering: "on"  # Enable response buffering
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"  # Increase timeout
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 spec:
   ingressClassName: nginx
-  tls:
-  - hosts:
-    - prod.afraz.dev
-    secretName: tls-prod-secret  # Ensure you create this secret for SSL
+  # Removed, and why:
+  #   - `host: prod.afraz.dev` + tls/`tls-prod-secret`: a domain and certificate only the
+  #     upstream author has. Requests to our LB's own DNS name would never match the rule.
+  #   - `ssl-redirect: "true"`: forced http -> https into a certificate that doesn't exist.
+  #   - the `/api` path routed to `api-service:8080`, a Service that exists nowhere in
+  #     this repo, so that path could only ever return 503.
   rules:
-  - host: prod.afraz.dev
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: web-service
-            port:
-              number: 80
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api-service
-            port:
-              number: 8080
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-service
+                port:
+                  number: 80

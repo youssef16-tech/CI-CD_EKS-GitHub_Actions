@@ -4,36 +4,38 @@ kind: Kustomization
 namespace: app-prod
 
 resources:
-- ../../base
+  - ../../base
 
 patchesStrategicMerge:
-- deploy-prod.yaml
-- svc-prod.yaml
-- ingress-prod.yaml
+  - deploy-prod.yaml
+  - svc-prod.yaml
+  - ingress-prod.yaml
 
 configMapGenerator:
-- name: app-prod-config
-  literals:
-  - ENV=production
-  - LOG_LEVEL=warn
-  - PORT=3000
-  options:
-    disableNameSuffixHash: false
+  - name: app-prod-config
+    literals:
+      - ENV=production
+      - LOG_LEVEL=warn
+      - PORT=3000
+    options:
+      disableNameSuffixHash: false
 
-secretGenerator:
-- name: app-prod-secrets
-  envs:
-  - secrets.env
-  options:
-    disableNameSuffixHash: false
+# The original had a secretGenerator reading `secrets.env`, a file that does not exist
+# in this repo (correctly - it would hold secrets). `kustomize build` failed outright.
+# The app reads no secrets (index.js only uses PORT/HOST), so the generator is removed.
+# A real project would inject secrets via External Secrets / SSM, never a committed file.
 
+# 2 replicas, not 3: a single t3.small node cannot schedule 3 pods once the
+# system pods (coredns x2, kube-proxy, aws-node, ingress-nginx) take their share.
 replicas:
-- name: web-deployment
-  count: 3
+  - name: web-deployment
+    count: 2
 
+# `kustomize edit set image aphraz/node-app=<ecr-image>` rewrites this entry in CI,
+# which then retags every container whose image name is `aphraz/node-app`.
 images:
-- name: aphraz/node-app
-  newTag: production
+  - name: aphraz/node-app
+    newTag: production
 
 commonLabels:
   environment: production

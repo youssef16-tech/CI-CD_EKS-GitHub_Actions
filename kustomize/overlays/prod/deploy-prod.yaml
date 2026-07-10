@@ -6,47 +6,30 @@ metadata:
     app: web
     env: production
 spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web
   template:
-    metadata:
-      labels:
-        app: web
     spec:
-      containers:
-      - name: web-app
-        image: aphraz/node-app:1.1.1-prod  # Production-specific image
-        imagePullPolicy: Always
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1Gi"
-          requests:
-            cpu: "500m"
-            memory: "512Mi"
-        ports:
-          - containerPort: 3000
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 10
-          periodSeconds: 20
-        securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
-          allowPrivilegeEscalation: false
       terminationGracePeriodSeconds: 30
+      containers:
+        # The container name MUST match the base ("web-container"). Strategic-merge
+        # patches match list entries by their merge key, and for containers that key is
+        # `name`. The original said `web-app`, so instead of patching the base container
+        # it ADDED a second one - two containers both binding :3000 -> crash loop.
+        - name: web-container
+          # Requests trimmed to fit a single t3.small worker node.
+          # The original asked for 3 x (500m CPU, 512Mi) = 1.5 vCPU / 1.5Gi *requested*,
+          # more than the node can allocate once system pods are placed -> Pending forever.
+          # The image and securityContext are intentionally NOT set here: the base already
+          # defines runAsUser 1001 (matching the Dockerfile's `nodejs` user), and the image
+          # is injected by `kustomize edit set image` in the CD pipeline.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 1
+      maxUnavailable: 0

@@ -3,23 +3,23 @@ kind: Ingress
 metadata:
   name: e2ecicd-ingress
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
-  tls:
-  - hosts:
-    - site.afraz.com
-    secretName: site-tls-secret  # TLS certificate for HTTPS
+  # No `host:` on purpose - the rule then matches ANY hostname, including the AWS
+  # load balancer's own DNS name. The original pinned `host: site.afraz.com`, a domain
+  # only the upstream author controls, so every request through the LB would 404.
+  #
+  # The TLS block was removed too: it referenced `secretName: site-tls-secret` (which
+  # does not exist), and `ssl-redirect: "true"` forced http -> https into a missing cert.
+  # `rewrite-target: /` was dropped as it is a no-op for a bare `/` prefix path.
   rules:
-  - host: site.afraz.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: web-service
-            port:
-              number: 80
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-service
+                port:
+                  number: 80

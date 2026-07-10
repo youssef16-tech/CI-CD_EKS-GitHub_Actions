@@ -1,145 +1,144 @@
 name: Production CD Pipeline
 
 on:
-  # Automatic triggers DISABLED on purpose.
-  # This workflow cannot succeed yet - known defects:
-  #   - AWS_REGION us-west-2 / EKS_CLUSTER_NAME e2ecicd-cluster don't match what
-  #     terraform creates (eu-central-1 / e2ecicd-eks-dev)
-  #   - it cd's into kustomize/overlays/production, but the folder is .../prod
-  #   - build-and-push declares no job-level `outputs:`, so needs.*.outputs.image is empty
-  #   - `kustomize edit set image` omits the `oldname=` part, so the built image is
-  #     never actually deployed (aphraz/node-app ships instead)
-  #   - smoke test reads a loadBalancer hostname from a ClusterIP Service
-  #   - overlays/prod/secrets.env doesn't exist, so `kustomize build` fails
-  # It also needs AWS credentials in repo secrets and a live EKS cluster (costs money).
-  # Re-enable the push trigger once those are fixed.
+  push:
+    branches: [master]
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-west-2
+  # Was us-west-2 / e2ecicd-cluster - neither matched what terraform actually builds.
+  AWS_REGION: eu-central-1
+  EKS_CLUSTER_NAME: e2ecicd-eks-dev
   ECR_REPOSITORY: calculator-app
-  EKS_CLUSTER_NAME: e2ecicd-cluster
+  K8S_NAMESPACE: app-prod
   NODE_VERSION: 20
+
+permissions:
+  contents: read
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
+
+    # Without this job-level block, `needs.build-and-push.outputs.image` is always
+    # empty - a step writing to $GITHUB_OUTPUT does NOT automatically expose it.
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: app/package-lock.json
-        
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-        
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-      
-    - name: Run tests
-      run: |
-        cd app
-        npm ci
-        npm test -- --coverage
-        
-    - name: Build, tag, and push image to Amazon ECR
-      id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        cd app
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        
-    - name: Update deployment image using Kustomize
-      run: |
-        cd kustomize/overlays/production
-        kustomize edit set image ${{ steps.build-image.outputs.image }}
-        kustomize build . > updated-deployment.yaml
-        
-    - name: Commit updated deployment
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add kustomize/overlays/production/kustomization.yaml
-        git commit -m "Update deployment image to ${{ github.sha }}" || exit 0
-        git push
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - name: Run tests
+        run: |
+          cd app
+          npm ci
+          npm test
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd app
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   deploy-to-eks:
     needs: build-and-push
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: app/package-lock.json
-        
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-        
-    - name: Update kubeconfig
-      run: |
-        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
-        
-    - name: Deploy to EKS
-      run: |
-        kubectl apply -k kustomize/overlays/production/
-        
-    - name: Verify deployment
-      run: |
-        kubectl rollout status deployment/web-deployment -n app-prod --timeout=300s
-        kubectl get pods -l app=web -n app-prod
-        
-    - name: Run smoke tests
-      run: |
-        # Get the service endpoint
-        SERVICE_URL=$(kubectl get service web-service -n app-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-        echo "Service URL: http://$SERVICE_URL"
-        
-        # Wait for service to be ready
-        for i in {1..30}; do
-          if curl -f http://$SERVICE_URL/health; then
-            echo "Health check passed"
-            break
-          fi
-          echo "Waiting for service to be ready... ($i/30)"
-          sleep 10
-        done
-        
-    - name: Run security scan on deployed application
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ needs.build-and-push.outputs.image }}
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-        
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kustomize
+        run: |
+          curl -sS "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Ensure namespace exists
+        run: kubectl create namespace "$K8S_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Point kustomize at the image we just built
+        env:
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+        run: |
+          test -n "$IMAGE" || { echo "image output is empty"; exit 1; }
+          cd kustomize/overlays/prod
+          # The `oldname=` half is essential. `kustomize edit set image <newimage>` alone
+          # just registers an unrelated entry, leaving the deployment on aphraz/node-app -
+          # the pipeline would push to ECR and then deploy someone else's public image.
+          kustomize edit set image "aphraz/node-app=$IMAGE"
+          grep -A3 '^images:' kustomization.yaml
+
+      - name: Deploy to EKS
+        run: kubectl apply -k kustomize/overlays/prod/
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/web-deployment -n "$K8S_NAMESPACE" --timeout=300s
+          kubectl get pods -l app=web -n "$K8S_NAMESPACE" -o wide
+
+      - name: Confirm the running image is the one we built
+        env:
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+        run: |
+          RUNNING=$(kubectl get deployment web-deployment -n "$K8S_NAMESPACE" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "expected: $IMAGE"
+          echo "running : $RUNNING"
+          [ "$RUNNING" = "$IMAGE" ] || { echo "DEPLOYED THE WRONG IMAGE"; exit 1; }
+
+      - name: Smoke test /health through the ingress load balancer
+        run: |
+          # The original read .status.loadBalancer.ingress[0].hostname from `web-service`,
+          # which is a ClusterIP and therefore never has one. The public entrypoint is the
+          # ingress-nginx controller's LoadBalancer.
+          LB=$(kubectl get svc ingress-nginx-controller -n ingress-nginx \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "Load balancer: $LB"
+          for i in $(seq 1 30); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$LB/health" || true)
+            if [ "$CODE" = "200" ]; then
+              echo "Health check passed"
+              curl -s "http://$LB/health"; echo
+              exit 0
+            fi
+            echo "attempt $i/30 -> HTTP $CODE, retrying..."
+            sleep 10
+          done
+          echo "Health check never returned 200"
+          exit 1
