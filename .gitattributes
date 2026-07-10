@@ -1,0 +1,11 @@
+# The eslint config sets `linebreak-style: ['error', 'unix']`, and CI runs on
+# ubuntu-latest (LF). Windows checkouts default to CRLF (core.autocrlf=true),
+# which makes `npm run lint` fail locally while passing in CI.
+# Force LF in the working tree for all text files so both agree.
+* text=auto eol=lf
+
+# Binary / generated - never touch line endings
+*.png binary
+*.jpg binary
+*.ico binary
+tfplan binary

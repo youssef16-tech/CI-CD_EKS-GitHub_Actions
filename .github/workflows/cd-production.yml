@@ -1,9 +1,18 @@
 name: Production CD Pipeline
 
 on:
-  push:
-    branches: [ master ]
-    tags: [ 'v*' ]
+  # Automatic triggers DISABLED on purpose.
+  # This workflow cannot succeed yet - known defects:
+  #   - AWS_REGION us-west-2 / EKS_CLUSTER_NAME e2ecicd-cluster don't match what
+  #     terraform creates (eu-central-1 / e2ecicd-eks-dev)
+  #   - it cd's into kustomize/overlays/production, but the folder is .../prod
+  #   - build-and-push declares no job-level `outputs:`, so needs.*.outputs.image is empty
+  #   - `kustomize edit set image` omits the `oldname=` part, so the built image is
+  #     never actually deployed (aphraz/node-app ships instead)
+  #   - smoke test reads a loadBalancer hostname from a ClusterIP Service
+  #   - overlays/prod/secrets.env doesn't exist, so `kustomize build` fails
+  # It also needs AWS credentials in repo secrets and a live EKS cluster (costs money).
+  # Re-enable the push trigger once those are fixed.
   workflow_dispatch:
 
 env:

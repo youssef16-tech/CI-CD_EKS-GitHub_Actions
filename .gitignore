@@ -3,7 +3,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+# package-lock.json  <- MUST be committed: ci.yml runs `npm ci`, which requires it.
+# Lockfiles are ignored for libraries, committed for applications. This is an app.
 yarn.lock
 pnpm-lock.yaml
 
@@ -153,3 +154,6 @@ venv.bak/
 
 # Lock files (keep only relevant ones)
 *.lock-wscript
+# Saved terraform plan files (local artifacts)
+tfplan
+*.tfplan

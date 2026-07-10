@@ -1,11 +1,14 @@
 terraform {
-  backend "s3" {
-    bucket         = "my-terraform-state-bucket"
-    key            = "terraform/state.tfstate"
-    region         = "ap-southeast-1"
-    encrypt        = true
-    dynamodb_table = "terraform-lock"
-  }
+  # --- Remote S3 backend disabled for this solo learning lab ---
+  # That bucket isn't ours (and the name is globally taken), so `init` would fail.
+  # With this commented out, state lives in a local ./terraform.tfstate file. Free.
+  # backend "s3" {
+  #   bucket         = "my-terraform-state-bucket"
+  #   key            = "terraform/state.tfstate"
+  #   region         = "ap-southeast-1"
+  #   encrypt        = true
+  #   dynamodb_table = "terraform-lock"
+  # }
 
   required_providers {
     aws = {
@@ -39,7 +42,7 @@ terraform {
 
 provider "aws" {
   region = var.region
-  
+
   default_tags {
     tags = {
       Environment = var.environment

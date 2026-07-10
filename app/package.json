@@ -16,7 +16,10 @@
   "devDependencies": {
     "jest": "^29.6.1",
     "nodemon": "^3.0.0",
-    "eslint": "^8.55.0"
+    "eslint": "^8.55.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-security": "^1.7.1"
   },
   "keywords": ["nodejs", "calculator", "jest", "testing", "kubernetes", "docker", "ci-cd"],
   "author": "Harshhaa",
@@ -32,6 +35,8 @@
     "testEnvironment": "node",
     "collectCoverageFrom": [
       "*.js",
+      "!index.js",
+      "!.eslintrc.js",
       "!node_modules/**",
       "!coverage/**"
     ],

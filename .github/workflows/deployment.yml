@@ -1,21 +1,9 @@
 name: Multi-Environment Deployment Pipeline
 
 on:
-  pull_request:
-    types:
-    - closed
-    paths-ignore:
-    - 'VERSION'
-    branches:
-    - dev
-  push:
-    branches:
-    - prod
-    - dev
-    - staging
-    paths-ignore:
-    - 'VERSION'
-    - 'README.md'
+  # Automatic triggers DISABLED on purpose - this pipeline provisions real AWS
+  # infrastructure (terraform apply) and needs AWS credentials, ECR, Cloudflare and
+  # Slack secrets that aren't configured. Manual-only until we wire those up.
   workflow_dispatch:
 
 permissions:

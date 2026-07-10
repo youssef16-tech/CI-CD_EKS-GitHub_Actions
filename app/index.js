@@ -1,65 +1,66 @@
-const http = require('http')
-const qs = require('querystring')
-const calculator = require('./calculator')
-const url = require('url')
+const http = require('http');
+const qs = require('querystring');
+const url = require('url');
 
-const server = http.createServer(function(request, response) {
-  const parsedUrl = url.parse(request.url, true)
-  const path = parsedUrl.pathname
+const calculator = require('./calculator');
+
+const server = http.createServer((request, response) => {
+  const parsedUrl = url.parse(request.url, true);
+  const path = parsedUrl.pathname;
 
   // Add CORS headers
-  response.setHeader('Access-Control-Allow-Origin', '*')
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
-    response.writeHead(200)
-    response.end()
-    return
+    response.writeHead(200);
+    response.end();
+    return;
   }
 
   // Health check endpoint
   if (path === '/health') {
-    response.writeHead(200, {'Content-Type': 'application/json'})
-    response.end(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }))
-    return
+    response.writeHead(200, {'Content-Type': 'application/json'});
+    response.end(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }));
+    return;
   }
 
   // API endpoint for calculations
   if (path === '/api/calculate' && request.method === 'POST') {
-    let body = ''
-    request.on('data', function(data) {
-      body += data
-    })
+    let body = '';
+    request.on('data', (data) => {
+      body += data;
+    });
 
-    request.on('end', function() {
+    request.on('end', () => {
       try {
-        const post = qs.parse(body)
-        const numbers = post.numbers
-        const result = calculator.add(numbers)
-        response.writeHead(200, {'Content-Type': 'application/json'})
-        response.end(JSON.stringify({ result: result }))
+        const post = qs.parse(body);
+        const numbers = post.numbers;
+        const result = calculator.add(numbers);
+        response.writeHead(200, {'Content-Type': 'application/json'});
+        response.end(JSON.stringify({ result: result }));
       } catch (error) {
-        response.writeHead(400, {'Content-Type': 'application/json'})
-        response.end(JSON.stringify({ error: error.message }))
+        response.writeHead(400, {'Content-Type': 'application/json'});
+        response.end(JSON.stringify({ error: error.message }));
       }
-    })
-    return
+    });
+    return;
   }
 
   if (request.method === 'POST') {
-    let body = ''
-    request.on('data', function(data) {
-      body += data
-    })
+    let body = '';
+    request.on('data', (data) => {
+      body += data;
+    });
 
-    request.on('end', function() {
+    request.on('end', () => {
       try {
-        const post = qs.parse(body)
-        const numbers = post.numbers
-        const result = calculator.add(numbers)
-        response.writeHead(200, {'Content-Type': 'text/html'})
+        const post = qs.parse(body);
+        const numbers = post.numbers;
+        const result = calculator.add(numbers);
+        response.writeHead(200, {'Content-Type': 'text/html'});
         response.end(`
           <html>
             <body>
@@ -67,9 +68,9 @@ const server = http.createServer(function(request, response) {
               <a href="/">Back to Calculator</a>
             </body>
           </html>
-        `)
+        `);
       } catch (error) {
-        response.writeHead(400, {'Content-Type': 'text/html'})
+        response.writeHead(400, {'Content-Type': 'text/html'});
         response.end(`
           <html>
             <body>
@@ -77,9 +78,9 @@ const server = http.createServer(function(request, response) {
               <a href="/">Back to Calculator</a>
             </body>
           </html>
-        `)
+        `);
       }
-    })
+    });
   } else {
     const html = `
       <html>
@@ -112,31 +113,31 @@ const server = http.createServer(function(request, response) {
             </div>
           </div>
         </body>
-      </html>`
-    response.writeHead(200, {'Content-Type': 'text/html'})
-    response.end(html)
+      </html>`;
+    response.writeHead(200, {'Content-Type': 'text/html'});
+    response.end(html);
   }
-})
+});
 
-const port = process.env.PORT || 3000
-const host = process.env.HOST || '0.0.0.0'
+const port = process.env.PORT || 3000;
+const host = process.env.HOST || '0.0.0.0';
 
 server.listen(port, host, () => {
-  console.log(`Server listening at http://${host}:${port}`)
-  console.log(`Health check available at http://${host}:${port}/health`)
-})
+  console.log(`Server listening at http://${host}:${port}`);
+  console.log(`Health check available at http://${host}:${port}/health`);
+});
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully')
+  console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    console.log('Process terminated')
-  })
-})
+    console.log('Process terminated');
+  });
+});
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully')
+  console.log('SIGINT received, shutting down gracefully');
   server.close(() => {
-    console.log('Process terminated')
-  })
-})
+    console.log('Process terminated');
+  });
+});

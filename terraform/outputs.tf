@@ -20,14 +20,16 @@ output "cluster_name" {
   value       = module.eks.cluster_name
 }
 
+# The eks module (v19.21.0) exposes `eks_managed_node_groups` as a MAP of node
+# groups, not flat lists. Loop over that map to pull each group's arn / id.
 output "node_group_arns" {
   description = "ARNs of the EKS managed node groups"
-  value       = module.eks.node_group_arns
+  value       = [for ng in module.eks.eks_managed_node_groups : ng.node_group_arn]
 }
 
 output "node_group_ids" {
   description = "IDs of the EKS managed node groups"
-  value       = module.eks.node_group_ids
+  value       = [for ng in module.eks.eks_managed_node_groups : ng.node_group_id]
 }
 
 output "vpc_id" {

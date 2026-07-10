@@ -48,13 +48,23 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "19.21.0"
 
-  cluster_name    = local.cluster_name
-  cluster_version = "1.29"
+  cluster_name = local.cluster_name
+  # 1.29 is in EKS "extended support" = $0.60/hr control plane (6x).
+  # 1.34 is in standard support = $0.10/hr. Verified via `aws eks describe-cluster-versions`.
+  cluster_version = "1.34"
 
-  vpc_id                         = module.vpc.vpc_id
-  subnet_ids                     = module.vpc.private_subnets
-  cluster_endpoint_public_access = true
+  vpc_id                          = module.vpc.vpc_id
+  subnet_ids                      = module.vpc.private_subnets
+  cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
+
+  # --- Cost guard for this short-lived lab ---
+  # A customer-managed KMS key costs $1/month, and `terraform destroy` can only
+  # SCHEDULE its deletion (7-30 day window; defaults to 30). AWS bills for the key
+  # that entire time, so it would outlive the cluster and eat the whole budget.
+  # Cluster secrets are still encrypted at rest with AWS-managed keys without this.
+  create_kms_key            = false
+  cluster_encryption_config = {}
 
   # Enable EKS add-ons
   cluster_addons = {
@@ -71,7 +81,8 @@ module "eks" {
 
   # Set default configurations for EKS managed nodes
   eks_managed_node_group_defaults = {
-    ami_type = "AL2_x86_64"
+    # EKS 1.34 does not offer Amazon Linux 2 node images; AL2023 is the current node OS.
+    ami_type                   = "AL2023_x86_64_STANDARD"
     iam_role_attach_cni_policy = true
   }
 

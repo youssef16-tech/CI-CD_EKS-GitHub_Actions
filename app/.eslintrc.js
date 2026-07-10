@@ -1,4 +1,8 @@
 module.exports = {
+  // Generated output must never be linted. CI happens to run `lint` before `test`
+  // (so coverage/ doesn't exist yet there), but locally it does - same code, different
+  // result depending on command order. Pin it down explicitly.
+  ignorePatterns: ['coverage/**', 'node_modules/**', 'dist/**', 'build/**'],
   env: {
     browser: true,
     commonjs: true,
